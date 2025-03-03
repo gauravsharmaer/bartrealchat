@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebSocket Complete Test</title>
+    <style>
+      #chat {
+        height: 400px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+      .message {
+        margin: 5px 0;
+      }
+      .user {
+        color: blue;
+      }
+      .ai {
+        color: green;
+      }
+      .error {
+        color: red;
+      }
+      .system {
+        color: purple;
+      }
+      #connectionStatus {
+        padding: 10px;
+        margin: 10px 0;
+        font-weight: bold;
+      }
+      .connected {
+        background-color: #dff0d8;
+      }
+      .disconnected {
+        background-color: #f2dede;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="connectionStatus" class="disconnected">Disconnected</div>
+    <button onclick="connectWebSocket()">Connect</button>
+    <button onclick="disconnectWebSocket()">Disconnect</button>
+
+    <div id="chat"></div>
+    <input
+      type="text"
+      id="messageInput"
+      style="width: 80%"
+      placeholder="Type your message..."
+    />
+    <button onclick="sendMessage()">Send</button>
+    <div style="margin-top: 10px">
+      <button id="recordButton">Start Recording</button>
+      <button disabled id="stopButton">Stop Recording</button>
+    </div>
+
+    <script>
+      let ws;
+      let mediaRecorder;
+      let audioChunks = [];
+      let reconnectAttempts = 0;
+      const MAX_RECONNECT_ATTEMPTS = 5;
+      let audioBuffer = '';
+      let expectedAudioChunks = 0;
+      let receivedAudioChunks = 0;
+      let isRecording = false;
+      let chunkSequence = 0;
+      let currentSessionId = null;
+      let recognition = null;
+      let transcriptText = '';
+
+      function connectWebSocket() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          appendMessage("System", "Already connected");
+          return;
+        }
+
+        ws = new WebSocket(
+          "wss://t96c5ct584.execute-api.us-east-1.amazonaws.com/development/"
+        );
+
+        ws.onopen = () => {
+          updateConnectionStatus(true);
+          appendMessage("System", "Connected to chat");
+          reconnectAttempts = 0;
+          // enableInputs(true);
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          console.log("Received:", data);
+
+          switch (data.type) {
+            case "response_start":
+              appendMessage("AI", data.text);
+              // Display sources if available
+              if (data.sources && data.sources.length > 0) {
+                appendSources(data.sources);
+              }
+              // Initialize audio buffer
+              audioBuffer = '';
+              expectedAudioChunks = data.total_audio_chunks;
+              receivedAudioChunks = 0;
+              appendMessage("AI", "🔊 Receiving audio response...");
+              break;
+
+            case "audio_chunk":
+              // Accumulate audio chunks
+              audioBuffer += data.data;
+              receivedAudioChunks++;
+
+              // If this is the last chunk, play the complete audio
+              if (data.is_last || receivedAudioChunks === expectedAudioChunks) {
+                appendMessage("AI", "🔊 Playing audio response...");
+                playAudio(audioBuffer);
+                // Reset buffer
+                audioBuffer = '';
+                expectedAudioChunks = 0;
+                receivedAudioChunks = 0;
+              }
+              break;
+
+            case "processing":
+              appendMessage("System", data.content);
+              break;
+
+            case "error":
+              appendMessage("Error", data.content);
+              break;
+          }
+        };
+
+        ws.onclose = (event) => {
+          updateConnectionStatus(false);
+          appendMessage("System", `Disconnected - Code: ${event.code}`);
+          // enableInputs(false);
+
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            appendMessage(
+              "System",
+              `Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`
+            );
+            setTimeout(connectWebSocket, 3000);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error("WebSocket Error:", error);
+          appendMessage("Error", "WebSocket error occurred");
+        };
+      }
+
+      function disconnectWebSocket() {
+        if (ws) {
+          ws.close();
+          appendMessage("System", "Manually disconnected");
+        }
+      }
+
+      function updateConnectionStatus(connected) {
+        const status = document.getElementById("connectionStatus");
+        if (connected) {
+          status.textContent = "Connected";
+          status.className = "connected";
+        } else {
+          status.textContent = "Disconnected";
+          status.className = "disconnected";
+        }
+      }
+
+      function sendMessage() {
+        const input = document.getElementById("messageInput");
+        const message = input.value.trim();
+
+        if (message && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "text",
+              content: message,
+            })
+          );
+          appendMessage("You", message);
+          input.value = "";
+        } else {
+          appendMessage("Error", "Not connected to WebSocket");
+        }
+      }
+
+      function appendMessage(sender, text) {
+        const chat = document.getElementById("chat");
+        const div = document.createElement("div");
+        div.className = `message ${sender.toLowerCase()}`;
+        div.textContent = `${sender}: ${text}`;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      function playAudio(audioData) {
+        try {
+          // Convert base64 to blob
+          const binaryData = atob(audioData);
+          const arrayBuffer = new ArrayBuffer(binaryData.length);
+          const uint8Array = new Uint8Array(arrayBuffer);
+          for (let i = 0; i < binaryData.length; i++) {
+            uint8Array[i] = binaryData.charCodeAt(i);
+          }
+          const blob = new Blob([arrayBuffer], { type: 'audio/mp3' });
+          const audioUrl = URL.createObjectURL(blob);
+          
+          const audio = new Audio(audioUrl);
+          audio.onended = () => {
+            // Clean up by revoking the blob URL after playback
+            URL.revokeObjectURL(audioUrl);
+          };
+          
+          audio.play().catch((error) => {
+            console.error("Audio playback error:", error);
+            appendMessage("Error", "Failed to play audio");
+          });
+        } catch (error) {
+          console.error("Error processing audio data:", error);
+          appendMessage("Error", "Failed to process audio data");
+        }
+      }
+
+      document
+        .getElementById("messageInput")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            sendMessage();
+          }
+        });
+
+      // Auto-connect on page load
+      connectWebSocket();
+
+      // Add a function to display sources
+      function appendSources(sources) {
+        const chat = document.getElementById("chat");
+        const div = document.createElement("div");
+        div.className = "message sources";
+
+        const sourcesList = document.createElement("ul");
+        sourcesList.style.fontSize = "0.8em";
+        sourcesList.style.color = "#666";
+
+        const sourcesHeader = document.createElement("div");
+        sourcesHeader.textContent = "Sources:";
+        sourcesHeader.style.fontWeight = "bold";
+        div.appendChild(sourcesHeader);
+
+        sources.forEach((source) => {
+          const li = document.createElement("li");
+          li.textContent = source;
+          sourcesList.appendChild(li);
+        });
+
+        div.appendChild(sourcesList);
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        console.log("getUserMedia supported.");
+        
+        // Set up speech recognition
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          console.error("Speech recognition not supported in this browser");
+          appendMessage("Error", "Speech recognition not supported in this browser");
+        } else {
+          // Create speech recognition instance
+          recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+          
+          // Handle speech recognition results
+          recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcript = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                finalTranscript += transcript;
+              } else {
+                interimTranscript += transcript;
+              }
+            }
+            
+            // Update transcriptText with final results
+            if (finalTranscript) {
+              transcriptText += finalTranscript + ' ';
+              console.log("Final transcript:", transcriptText);
+            }
+            
+            // Display interim results
+            if (interimTranscript) {
+              appendMessage("You (speaking)", interimTranscript);
+            }
+          };
+          
+          recognition.onerror = (event) => {
+            console.error("Speech recognition error", event.error);
+            appendMessage("Error", "Speech recognition error: " + event.error);
+          };
+        }
+        
+        // Set up UI controls for recording
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((stream) => {
+            const recordButton = document.getElementById("recordButton");
+            const stopButton = document.getElementById("stopButton");
+
+            recordButton.onclick = () => {
+              console.log("Speech recognition started");
+              transcriptText = ''; // Reset transcript
+              
+              // Start speech recognition
+              try {
+                recognition.start();
+                appendMessage("System", "Listening...");
+                recordButton.disabled = true;
+                stopButton.disabled = false;
+              } catch (error) {
+                console.error("Error starting speech recognition:", error);
+                appendMessage("Error", "Failed to start speech recognition");
+              }
+            };
+
+            stopButton.onclick = () => {
+              console.log("Speech recognition stopped");
+              
+              // Stop speech recognition
+              try {
+                recognition.stop();
+                recordButton.disabled = false;
+                stopButton.disabled = true;
+                
+                // Send the transcribed text to the server
+                if (transcriptText.trim() && ws && ws.readyState === WebSocket.OPEN) {
+                  appendMessage("You", transcriptText.trim());
+                  
+                  ws.send(
+                    JSON.stringify({
+                      type: "text",
+                      content: transcriptText.trim(),
+                    })
+                  );
+                } else {
+                  appendMessage("System", "No speech detected or not connected");
+                }
+              } catch (error) {
+                console.error("Error stopping speech recognition:", error);
+                appendMessage("Error", "Failed to stop speech recognition");
+              }
+            };
+          })
+          .catch((err) => {
+            console.error("Error accessing microphone:", err);
+            appendMessage(
+              "Error",
+              "Failed to access microphone: " + err.message
+            );
+          });
+      } else {
+        console.log("getUserMedia not supported on your browser!");
+        appendMessage("Error", "Audio recording not supported in this browser");
+      }
+
+      function generateUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          var r = Math.random() * 16 | 0,
+              v = c == 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      }
+    </script>
+  </body>
+</html>
