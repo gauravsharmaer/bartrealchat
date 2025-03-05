@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html>
   <head>
     <title>WebSocket Complete Test</title>
@@ -380,6 +380,926 @@
           return v.toString(16);
         });
       }
+    </script>
+  </body>
+</html> -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant Chat</title>
+    <!-- Add Hark.js for Voice Activity Detection -->
+    <script src="https://cdn.jsdelivr.net/npm/hark@1.2.3/hark.bundle.js"></script>
+    <style>
+      /* Modern CSS with Variables */
+      :root {
+        --primary-color: #4a6ee0;
+        --success-color: #28a745;
+        --error-color: #dc3545;
+        --warning-color: #ffc107;
+        --system-color: #6c757d;
+        --border-color: #dee2e6;
+        --bg-color: #ffffff;
+        --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+
+      body {
+        font-family: var(--font-family);
+        margin: 0 auto;
+        padding: 20px;
+        max-width: 800px;
+        line-height: 1.5;
+      }
+
+      #chat {
+        height: 400px;
+        overflow-y: auto;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+
+      .message {
+        margin: 8px 0;
+        padding: 8px;
+        border-radius: 4px;
+        max-width: 85%;
+        word-wrap: break-word;
+      }
+
+      .user {
+        color: var(--primary-color);
+        background-color: rgba(74, 110, 224, 0.1);
+        margin-left: auto;
+      }
+
+      .ai {
+        color: var(--success-color);
+        background-color: rgba(40, 167, 69, 0.1);
+      }
+
+      .error {
+        color: var(--error-color);
+        background-color: rgba(220, 53, 69, 0.1);
+      }
+
+      .system {
+        color: var(--system-color);
+        font-style: italic;
+        background-color: rgba(108, 117, 125, 0.1);
+      }
+
+      .speaking {
+        color: var(--warning-color);
+        background-color: rgba(255, 193, 7, 0.1);
+      }
+
+      #connectionStatus {
+        padding: 10px;
+        margin: 10px 0;
+        font-weight: bold;
+        border-radius: 4px;
+        transition: background-color 0.3s ease;
+      }
+
+      .connected {
+        background-color: rgba(40, 167, 69, 0.2);
+      }
+
+      .disconnected {
+        background-color: rgba(220, 53, 69, 0.2);
+      }
+
+      .connecting {
+        background-color: rgba(255, 193, 7, 0.2);
+      }
+
+      .control-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      button {
+        padding: 8px 12px;
+        border: none;
+        border-radius: 4px;
+        background-color: var(--primary-color);
+        color: white;
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+      }
+
+      button:hover {
+        opacity: 0.9;
+      }
+
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+
+      button.recording {
+        background-color: var(--error-color);
+      }
+
+      input {
+        padding: 8px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-family: inherit;
+      }
+
+      .input-group {
+        display: flex;
+        gap: 8px;
+      }
+
+      .input-group input {
+        flex-grow: 1;
+      }
+
+      .sources-list {
+        font-size: 0.8rem;
+        color: var(--system-color);
+        margin-top: 5px;
+      }
+      
+      .tts-controls {
+        display: flex;
+        align-items: center;
+        margin-top: 10px;
+        gap: 10px;
+      }
+      
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 24px;
+      }
+      
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 24px;
+      }
+      
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+      }
+      
+      input:checked + .slider {
+        background-color: var(--primary-color);
+      }
+      
+      input:checked + .slider:before {
+        transform: translateX(26px);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AI Assistant Chat</h1>
+    <div id="connectionStatus" class="disconnected" aria-live="polite">Disconnected</div>
+    
+    <div class="control-row">
+      <button id="connectButton">Connect</button>
+      <button id="disconnectButton" disabled>Disconnect</button>
+    </div>
+
+    <div id="chat" aria-live="polite"></div>
+    
+    <div class="input-group">
+      <input
+        type="text"
+        id="messageInput"
+        placeholder="Type your message..."
+        aria-label="Type your message"
+        disabled
+      />
+      <button id="sendButton" disabled>Send</button>
+    </div>
+    
+    <div class="input-group" style="margin-top: 10px">
+      <button id="recordButton" disabled>Start Recording</button>
+    </div>
+    
+    <div class="tts-controls">
+      <label class="toggle-switch">
+        <input type="checkbox" id="ttsToggle" checked>
+        <span class="slider"></span>
+      </label>
+      <span>Text-to-Speech</span>
+    </div>
+
+    <script>
+      (() => {
+        // Configuration
+        const CONFIG = {
+          WEBSOCKET_URL: "wss://t96c5ct584.execute-api.us-east-1.amazonaws.com/development/",
+          MAX_RECONNECT_ATTEMPTS: 5,
+          RECONNECT_DELAY_MS: 3000,
+          SPEECH_LANG: 'en-US'
+        };
+
+        // State management
+        const state = {
+          ws: null,
+          recognition: null,
+          isConnected: false,
+          isConnecting: false,
+          isRecording: false,
+          transcriptText: '',
+          reconnectAttempts: 0,
+          lastMessageTime: 0,
+          isSpeaking: false,
+          preferredVoice: null,
+          ttsEnabled: true
+        };
+
+        // DOM Elements cache
+        const elements = {
+          connectionStatus: document.getElementById('connectionStatus'),
+          connectButton: document.getElementById('connectButton'),
+          disconnectButton: document.getElementById('disconnectButton'),
+          chat: document.getElementById('chat'),
+          messageInput: document.getElementById('messageInput'),
+          sendButton: document.getElementById('sendButton'),
+          recordButton: document.getElementById('recordButton'),
+          ttsToggle: document.getElementById('ttsToggle')
+        };
+
+        // Initialize speech synthesis
+        const speechSynthesis = window.speechSynthesis;
+        
+        // Set up speech synthesis voices when available
+        if (speechSynthesis) {
+          // Try to load voices immediately (works in some browsers)
+          let voices = speechSynthesis.getVoices();
+          
+          // If voices aren't loaded yet, set up event listener
+          if (voices.length === 0) {
+            speechSynthesis.onvoiceschanged = () => {
+              voices = speechSynthesis.getVoices();
+              selectPreferredVoice(voices);
+            };
+          } else {
+            selectPreferredVoice(voices);
+          }
+        }
+        
+        // Select a good default voice
+        function selectPreferredVoice(voices) {
+          // Prioritize high-quality English voices
+          state.preferredVoice = 
+            // voices.find(voice => voice.name.includes('Google') && voice.lang.startsWith('en-')) ||
+            voices.find(voice => voice.name.includes('Microsoft') && voice.lang.startsWith('en-')) ||
+            // voices.find(voice => voice.lang.startsWith('en-')) ||
+            voices[0]; // Fallback to first available voice
+            
+          console.log("Selected voice:", state.preferredVoice ? state.preferredVoice.name : "None available");
+        }
+        
+        // Text-to-speech function using Web Speech API
+        function speakText(text) {
+          if (!speechSynthesis || !state.ttsEnabled) return false;
+          
+          try {
+            // Cancel any ongoing speech
+            speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Use preferred voice if available
+            if (state.preferredVoice) {
+              utterance.voice = state.preferredVoice;
+            }
+            
+            // Set speech parameters
+            utterance.rate = 1.6;  // Normal speed
+            utterance.pitch = 1.0; // Normal pitch
+            utterance.volume = 1.0; // Full volume
+            
+            // Add event handlers
+            utterance.onstart = () => {
+              state.isSpeaking = true;
+              console.log("Speech started");
+            };
+            
+            utterance.onend = () => {
+              state.isSpeaking = false;
+              console.log("Speech ended");
+            };
+            
+            utterance.onerror = (event) => {
+              state.isSpeaking = false;
+              console.error("Speech error:", event.error);
+              appendMessage("Error", `Speech playback error: ${event.error}`);
+            };
+            
+            // Start speaking
+            speechSynthesis.speak(utterance);
+            return true;
+          } catch (error) {
+            console.error("TTS error:", error);
+            return false;
+          }
+        }
+        
+        // Stop any ongoing speech
+        function stopSpeech() {
+          if (speechSynthesis) {
+            speechSynthesis.cancel();
+            state.isSpeaking = false;
+          }
+        }
+
+        // Utility functions
+        const updateConnectionStatus = (status) => {
+          elements.connectionStatus.className = status;
+          
+          switch (status) {
+            case "connected":
+              elements.connectionStatus.textContent = "Connected";
+              elements.connectButton.disabled = true;
+              elements.disconnectButton.disabled = false;
+              break;
+            case "disconnected":
+              elements.connectionStatus.textContent = "Disconnected";
+              elements.connectButton.disabled = false;
+              elements.disconnectButton.disabled = true;
+              break;
+            case "connecting":
+              elements.connectionStatus.textContent = "Connecting...";
+              elements.connectButton.disabled = true;
+              elements.disconnectButton.disabled = true;
+              break;
+          }
+        };
+
+        const updateInputControls = (enabled) => {
+          elements.messageInput.disabled = !enabled;
+          elements.sendButton.disabled = !enabled;
+          elements.recordButton.disabled = !enabled;
+        };
+
+        const updateRecordingControls = (isRecording) => {
+          elements.recordButton.disabled = isRecording;
+          
+          if (isRecording) {
+            elements.recordButton.classList.add('recording');
+            elements.recordButton.textContent = "Recording...";
+          } else {
+            elements.recordButton.classList.remove('recording');
+            elements.recordButton.textContent = "Start Recording";
+          }
+        };
+
+        // DOM manipulation functions
+        const appendMessage = (sender, text) => {
+          const messageElement = document.createElement("div");
+          messageElement.className = `message ${sender.toLowerCase()}`;
+          
+          // Sanitize text to prevent XSS
+          const sanitizedText = text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+            
+          messageElement.textContent = `${sender}: ${sanitizedText}`;
+          elements.chat.appendChild(messageElement);
+          elements.chat.scrollTop = elements.chat.scrollHeight;
+          
+          // If this is an AI message, speak it
+          if (sender === "AI") {
+            speakText(text);
+          }
+        };
+
+        let interimMessageElement = null;
+        
+        const updateInterimTranscript = (text) => {
+          if (!interimMessageElement) {
+            interimMessageElement = document.createElement("div");
+            interimMessageElement.className = "message speaking";
+            elements.chat.appendChild(interimMessageElement);
+          }
+          
+          interimMessageElement.textContent = `You (speaking): ${text}`;
+          elements.chat.scrollTop = elements.chat.scrollHeight;
+        };
+
+        const appendSources = (sources) => {
+          const sourcesElement = document.createElement("div");
+          sourcesElement.className = "sources-list";
+          
+          const headerElement = document.createElement("div");
+          headerElement.textContent = "Sources:";
+          headerElement.style.fontWeight = "bold";
+          sourcesElement.appendChild(headerElement);
+          
+          const list = document.createElement("ul");
+          
+          sources.forEach(source => {
+            const item = document.createElement("li");
+            // Sanitize source to prevent XSS
+            const sanitizedSource = source
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#039;");
+              
+            item.textContent = sanitizedSource;
+            list.appendChild(item);
+          });
+          
+          sourcesElement.appendChild(list);
+          elements.chat.appendChild(sourcesElement);
+          elements.chat.scrollTop = elements.chat.scrollHeight;
+        };
+
+        // WebSocket functions
+        const connectWebSocket = () => {
+          if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+            appendMessage("System", "Already connected");
+            return;
+          }
+          
+          try {
+            state.isConnecting = true;
+            updateConnectionStatus("connecting");
+            appendMessage("System", "Connecting...");
+            
+            state.ws = new WebSocket(CONFIG.WEBSOCKET_URL);
+            
+            state.ws.onopen = () => {
+              state.isConnected = true;
+              state.isConnecting = false;
+              state.reconnectAttempts = 0;
+              updateConnectionStatus("connected");
+              appendMessage("System", "Connected to chat");
+              updateInputControls(true);
+              
+              // Tell server we'll handle TTS on client side
+              // sendToServer({
+              //   type: "client_config",
+              //   content: {
+              //     client_tts_enabled: "true"
+              //   }
+              // });
+            };
+            
+            state.ws.onmessage = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                console.log("Received:", data);
+                
+                processServerMessage(data);
+              } catch (error) {
+                console.error("Error processing message:", error);
+                appendMessage("Error", "Failed to process server message");
+              }
+            };
+            
+            state.ws.onclose = (event) => {
+              state.isConnected = false;
+              state.isConnecting = false;
+              updateConnectionStatus("disconnected");
+              updateInputControls(false);
+              appendMessage("System", `Disconnected - Code: ${event.code}`);
+              
+              // Try to reconnect if not manually closed
+              if (event.code !== 1000 && event.code !== 1001) {
+                attemptReconnect();
+              }
+            };
+            
+            state.ws.onerror = (error) => {
+              console.error("WebSocket Error:", error);
+              appendMessage("Error", "WebSocket error occurred");
+            };
+          } catch (error) {
+            console.error("WebSocket connection error:", error);
+            appendMessage("Error", `Connection error: ${error.message}`);
+            updateConnectionStatus("disconnected");
+            state.isConnecting = false;
+          }
+        };
+
+        const disconnectWebSocket = () => {
+          if (state.ws) {
+            state.ws.close();
+            appendMessage("System", "Manually disconnected");
+          }
+        };
+
+        const attemptReconnect = () => {
+          if (state.reconnectAttempts < CONFIG.MAX_RECONNECT_ATTEMPTS) {
+            state.reconnectAttempts++;
+            // Exponential backoff
+            const delay = CONFIG.RECONNECT_DELAY_MS * Math.pow(1.5, state.reconnectAttempts - 1);
+            
+            appendMessage(
+              "System",
+              `Attempting to reconnect (${state.reconnectAttempts}/${CONFIG.MAX_RECONNECT_ATTEMPTS}) in ${delay/1000} seconds...`
+            );
+            
+            setTimeout(connectWebSocket, delay);
+          }
+        };
+
+        const sendToServer = (data) => {
+          if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+            appendMessage("Error", "Cannot send message: not connected");
+            return false;
+          }
+          
+          try {
+            state.ws.send(JSON.stringify(data));
+            return true;
+          } catch (error) {
+            console.error("Error sending message:", error);
+            appendMessage("Error", "Failed to send message");
+            return false;
+          }
+        };
+
+        // Server message processing - simplified to handle text only
+        const processServerMessage = (data) => {
+          switch (data.type) {
+            case "response_start":
+              appendMessage("AI", data.text);
+              
+              if (data.sources && data.sources.length > 0) {
+                appendSources(data.sources);
+              }
+              
+              // Tell server we don't need audio chunks
+              // sendToServer({
+              //   type: "skip_audio",
+              //   content: "Using client-side TTS"
+              // });
+              break;
+              
+            // We can ignore audio_chunk messages since we're using client-side TTS
+            case "audio_chunk":
+              // Intentionally do nothing - we're using Web Speech API instead
+              break;
+              
+            case "processing":
+              appendMessage("System", data.content);
+              break;
+              
+            case "error":
+              appendMessage("Error", data.content);
+              break;
+              
+            default:
+              console.warn("Unknown message type:", data.type);
+          }
+        };
+
+        // Speech recognition setup
+        const initializeSpeechRecognition = () => {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          
+          if (!SpeechRecognition) {
+            appendMessage("Error", "Speech recognition not supported in this browser");
+            elements.recordButton.disabled = true;
+            return false;
+          }
+          
+          state.recognition = new SpeechRecognition();
+          // Optimize configuration for faster transcript generation
+          state.recognition.continuous = true;
+          state.recognition.interimResults = true;
+          state.recognition.maxAlternatives = 1; // Only need the best match
+          state.recognition.lang = CONFIG.SPEECH_LANG;
+          
+          // Setup event handlers
+          state.recognition.onstart = () => {
+            console.log("Recognition started");
+          };
+          
+          state.recognition.onaudiostart = () => {
+            console.log("Audio capturing started");
+          };
+          
+          // Optimize result handling for faster processing
+          state.recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+            
+            // Process only the most recent results for better performance
+            const resultLength = event.results.length;
+            const currentResult = event.results[event.resultIndex];
+            
+            if (currentResult.isFinal) {
+              // Process final result directly
+              finalTranscript = currentResult[0].transcript;
+              state.transcriptText += finalTranscript + ' ';
+              console.log("Final transcript:", finalTranscript);
+              stopRecording()
+            } else {
+              // Handle interim results more efficiently
+              interimTranscript = currentResult[0].transcript;
+            }
+            
+            // Display interim results
+            if (interimTranscript) {
+              updateInterimTranscript(interimTranscript);
+            }
+          };
+          
+          state.recognition.onspeechend = () => {
+            console.log("Speech ended");
+          };
+          
+          // Add additional event handler for faster recognition
+          state.recognition.onnomatch = () => {
+            console.log("No speech detected");
+          };
+          
+          state.recognition.onerror = (event) => {
+            console.error("Speech recognition error", event.error);
+            
+            // Only show errors that are not expected during normal operation
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+              appendMessage("Error", `Speech recognition error: ${event.error}`);
+            }
+            
+            // Auto-restart on certain errors
+            if (event.error === 'network' && state.isRecording) {
+              setTimeout(() => {
+                try {
+                  state.recognition.start();
+                  appendMessage("System", "Reconnecting speech recognition...");
+                } catch (e) {
+                  console.error("Failed to restart speech recognition", e);
+                }
+              }, 1000);
+            } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
+              // Don't stop for expected aborts or no-speech
+              stopRecording();
+            }
+          };
+          
+          return true;
+        };
+
+        // UI interaction functions
+        const sendMessage = () => {
+          const message = elements.messageInput.value.trim();
+          
+          if (!message) return;
+          
+          // Implement message throttling
+          const now = Date.now();
+          if (now - state.lastMessageTime < 1000) { // 1 second throttle
+            appendMessage("System", "Please wait a moment before sending another message");
+            return;
+          }
+          state.lastMessageTime = now;
+          
+          if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+            sendToServer({
+              type: "text",
+              content: message
+            });
+            
+            appendMessage("You", message);
+            elements.messageInput.value = "";
+          } else {
+            appendMessage("Error", "Not connected to WebSocket");
+          }
+        };
+
+        const startRecording = () => {
+          stopSpeech();
+          state.transcriptText = '';
+          state.isRecording = true;
+          
+          try {
+            // Get audio stream for VAD with better audio quality parameters
+            navigator.mediaDevices.getUserMedia({ 
+              audio: { 
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1,
+                sampleRate: 16000 // Optimal for speech recognition
+              } 
+            })
+              .then(stream => {
+                // Set up advanced voice activity detection
+                const options = {
+                  threshold: -50,      // Increased sensitivity (was -65)
+                  interval: 75,        // More frequent checking
+                  play: false,         // Don't play back audio
+                  audioContext: new (window.AudioContext || window.webkitAudioContext)()
+                };
+                
+                const speechEvents = hark(stream, options);
+                
+                // Improve VAD with both speech start and stop events
+                speechEvents.on('speaking', () => {
+                  console.log("Speech started");
+                });
+                
+                speechEvents.on('stopped_speaking', () => {
+                  // When silence is detected, force finalization
+                  if (state.isRecording && state.recognition) {
+                    console.log("Silence detected - finalizing transcript");
+                    // Stop current recognition session to force finalization
+                    state.recognition.stop();
+                  }
+                });
+                
+                // Optimize recognition parameters for better quality
+                state.recognition.continuous = false; // Process in smaller chunks for better accuracy
+                state.recognition.interimResults = true;
+                state.recognition.maxAlternatives = 1;
+                
+                // Start recognition as normal
+                state.recognition.start();
+                appendMessage("System", "Listening... (speech will auto-send when recognized)");
+                updateRecordingControls(true);
+              })
+              .catch(err => {
+                console.error("Error accessing microphone:", err);
+                appendMessage("Error", "Failed to access microphone");
+              });
+          } catch (error) {
+            console.error("Error starting speech recognition:", error);
+            appendMessage("Error", "Failed to start speech recognition");
+            state.isRecording = false;
+          }
+        };
+        
+        const stopRecording = () => {
+          if (!state.isRecording) return;
+          
+          console.log("Speech recognition stopped, transcript:", state.transcriptText);
+          state.isRecording = false;
+          
+          try {
+            state.recognition.stop();
+            updateRecordingControls(false);
+            
+            const trimmedTranscript = state.transcriptText.trim();
+            console.log("Trimmed transcript:", trimmedTranscript, "Length:", trimmedTranscript.length);
+            console.log("WebSocket state:", state.ws ? state.ws.readyState : "null");
+            
+            // Check if we have a transcript, regardless of WebSocket status
+            if (trimmedTranscript) {
+              // Show the message to the user first
+              appendMessage("You", trimmedTranscript);
+              
+              // Then check if we can send it
+              if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                sendToServer({
+                  type: "text",
+                  content: trimmedTranscript
+                });
+              } else {
+                appendMessage("Error", "Not connected to server. Please connect first.");
+              }
+            } else {
+              appendMessage("System", "No speech detected");
+            }
+          } catch (error) {
+            console.error("Error stopping speech recognition:", error);
+            appendMessage("Error", "Failed to stop speech recognition");
+          }
+        };
+
+        // Event Listeners
+        const setupEventListeners = () => {
+          elements.connectButton.addEventListener("click", connectWebSocket);
+          elements.disconnectButton.addEventListener("click", disconnectWebSocket);
+          elements.sendButton.addEventListener("click", sendMessage);
+          elements.recordButton.addEventListener("click", startRecording);
+          
+          elements.messageInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+              sendMessage();
+            }
+          });
+          
+          // TTS toggle
+          elements.ttsToggle.addEventListener("change", (e) => {
+            state.ttsEnabled = e.target.checked;
+            if (!state.ttsEnabled && state.isSpeaking) {
+              stopSpeech();
+            }
+          });
+          
+          // Add error handling for page visibility changes
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible" && state.isConnected && state.ws.readyState !== WebSocket.OPEN) {
+              appendMessage("System", "Connection may have been lost while tab was inactive. Reconnecting...");
+              connectWebSocket();
+            }
+          });
+          
+          // Check for WebSocket support
+          if (!window.WebSocket) {
+            appendMessage("Error", "WebSockets are not supported in this browser");
+            elements.connectButton.disabled = true;
+            return false;
+          }
+          
+          return true;
+        };
+
+        // Initialization
+        const initialize = async () => {
+          // Setup event listeners
+          if (!setupEventListeners()) {
+            return;
+          }
+          
+          // Initialize speech recognition
+          const speechRecognitionAvailable = initializeSpeechRecognition();
+          
+          if (!speechRecognitionAvailable) {
+            appendMessage("System", "Speech recognition not available. Text input still works.");
+          }
+          
+          // Check for speech synthesis support
+          if (!('speechSynthesis' in window)) {
+            appendMessage("System", "Text-to-speech not supported in this browser.");
+            elements.ttsToggle.disabled = true;
+            elements.ttsToggle.checked = false;
+            state.ttsEnabled = false;
+          }
+          
+          // Request microphone permissions early
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+              await navigator.mediaDevices.getUserMedia({ audio: true });
+              console.log("Microphone access granted");
+            } catch (err) {
+              console.error("Microphone access denied:", err);
+              appendMessage("Error", `Microphone access denied: ${err.message}`);
+              elements.recordButton.disabled = true;
+            }
+          } else {
+            console.error("getUserMedia not supported");
+            appendMessage("Error", "Audio recording not supported in this browser");
+            elements.recordButton.disabled = true;
+          }
+        };
+        
+        // Start the application
+        initialize();
+      })();
     </script>
   </body>
 </html>
